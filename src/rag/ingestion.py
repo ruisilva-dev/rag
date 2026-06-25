@@ -1,8 +1,11 @@
 from pathlib import Path
-from typing import Generator
+from typing import Generator, Callable
 import itertools
 import re
 from rag.models import MinimalSource
+
+
+ChunkData = list[tuple[str, int, int]]
 
 
 class FileDiscoverer:
@@ -19,7 +22,7 @@ class FileDiscoverer:
         Args:
             repo_path (str | Path): The path to the target repository.
         """
-        self.repo_path = Path(repo_path)
+        self.repo_path: Path = Path(repo_path)
 
     def discover_files(self) -> Generator[Path, None, None]:
         """Recursively discovers all Python (.py) and Markdown (.md) files.
@@ -52,9 +55,13 @@ class FileChunker:
         Args:
             max_chunk_size (int): Maximum characters per chunk.
         """
-        self.max_chunk_size = max_chunk_size
+        self.max_chunk_size: int = max_chunk_size
+        self.parsers: dict[str, Callable[[Path], ChunkData]] = {
+            ".py": self._process_py,
+            ".md": self._process_md
+        }
 
-    def _process_py(self, file_path: Path) -> list[tuple[str, int, int]]:
+    def _process_py(self, file_path: Path) -> ChunkData:
         """Splits a Python file into logical code blocks.
 
         Reads the file content and isolates functions and classes using regex.
@@ -65,14 +72,14 @@ class FileChunker:
             file_path (Path): The path to the Python file.
 
         Returns:
-            list[tuple[str, int, int]]: A list of chunks with text,
+            ChunkData: A list of chunks with text,
                 start index, and end index.
         """
         content: str = file_path.read_text(encoding="utf-8")
         pattern: str = r"^(def |class )"
         current_start: int = 0
 
-        blocks: list[tuple[str, int, int]] = []
+        blocks: ChunkData = []
 
         # Slice content between function/class definitions
         for match in re.finditer(pattern, content, flags=re.MULTILINE):
@@ -89,7 +96,7 @@ class FileChunker:
             return []
 
         # Greedy packing
-        chunks: list[tuple[str, int, int]] = []
+        chunks: ChunkData = []
         acc_text: str = ""
         current_start = blocks[0][1]
         current_end: int = blocks[0][2]
@@ -141,7 +148,7 @@ class FileChunker:
 
         return chunks
 
-    def _process_md(self, file_path: Path) -> list[tuple[str, int, int]]:
+    def _process_md(self, file_path: Path) -> ChunkData:
         """Splits a Markdown file into logical text segments.
 
         Reads the file content and splits it by double newlines to isolate
@@ -152,14 +159,14 @@ class FileChunker:
             file_path (Path): The path to the Markdown file.
 
         Returns:
-            list[tuple[str, int, int]]: A list of chunks, where each tuple
+            ChunkData: A list of chunks, where each tuple
                 contains the chunk text, the absolute starting character index,
                 and the absolute ending character index.
         """
         content: str = file_path.read_text(encoding="utf-8")
         current_start: int = 0
 
-        blocks: list[tuple[str, int, int]] = []
+        blocks: ChunkData = []
 
         # Slice content between matches (paragraphs)
         for match in re.finditer(r"\n\n", content):
@@ -177,7 +184,7 @@ class FileChunker:
             return []
 
         # Greedy packing
-        chunks: list[tuple[str, int, int]] = []
+        chunks: ChunkData = []
 
         acc_text: str = blocks[0][0]
         current_start = blocks[0][1]
@@ -212,12 +219,11 @@ class FileChunker:
             list[MinimalSource]: A list of validated chunk metadata sources.
         """
         try:
-            if file_path.suffix == ".py":
-                raw_chunks = self._process_py(file_path)
-            elif file_path.suffix == ".md":
-                raw_chunks = self._process_md(file_path)
-            else:
+            parser = self.parsers.get(file_path.suffix)
+            if parser is None:
                 return []
+
+            raw_chunks = parser(file_path)
 
             # Package the raw chunks into Pydantic models
             sources = []
