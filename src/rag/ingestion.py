@@ -55,7 +55,91 @@ class FileChunker:
         self.max_chunk_size = max_chunk_size
 
     def _process_py(self, file_path: Path) -> list[tuple[str, int, int]]:
-        return []
+        """Splits a Python file into logical code blocks.
+
+        Reads the file content and isolates functions and classes using regex.
+        Greedily packs these blocks into chunks. If a single function exceeds
+        the maximum size, it falls back to line-by-line splitting.
+
+        Args:
+            file_path (Path): The path to the Python file.
+
+        Returns:
+            list[tuple[str, int, int]]: A list of chunks with text,
+                start index, and end index.
+        """
+        content: str = file_path.read_text(encoding="utf-8")
+        pattern: str = r"^(def |class )"
+        current_start: int = 0
+
+        blocks: list[tuple[str, int, int]] = []
+
+        # Slice content between function/class definitions
+        for match in re.finditer(pattern, content, flags=re.MULTILINE):
+            block_text: str = content[current_start:match.start()]
+            blocks.append((block_text, current_start, match.start()))
+            current_start = match.start()
+
+        # Cleanup for the end of the file
+        if current_start < len(content):
+            final_text = content[current_start:]
+            blocks.append((final_text, current_start, len(content)))
+
+        if not blocks:
+            return []
+
+        # Greedy packing
+        chunks: list[tuple[str, int, int]] = []
+        acc_text: str = ""
+        current_start = blocks[0][1]
+        current_end: int = blocks[0][2]
+
+        for block_text, block_start, block_end in blocks:
+            # Handle oversized block line-by-line
+            if len(block_text) > self.max_chunk_size:
+                if acc_text:
+                    chunks.append((acc_text, current_start, current_end))
+                    acc_text = ""
+
+                lines = block_text.split("\n")
+                sub_acc = lines[0]
+                sub_start = block_start
+                sub_end = block_start + len(lines[0])
+                local_offset = len(lines[0]) + 1
+
+                for line in lines[1:]:
+                    if len(sub_acc) + 1 + len(line) <= self.max_chunk_size:
+                        sub_acc += "\n" + line
+                        sub_end = sub_start + local_offset + len(line)
+                    else:
+                        chunks.append((sub_acc, sub_start, sub_end))
+                        sub_acc = line
+                        sub_start = block_start + local_offset
+                        sub_end = sub_start + len(line)
+
+                    local_offset += len(line) + 1
+
+                chunks.append((sub_acc, sub_start, sub_end))
+                continue
+
+            # Check if block fits (+1 for '\n')
+            if not acc_text:
+                acc_text = block_text
+                current_start = block_start
+                current_end = block_end
+            elif len(acc_text) + 1 + len(block_text) <= self.max_chunk_size:
+                acc_text += "\n" + block_text
+                current_end = block_end
+            else:
+                chunks.append((acc_text, current_start, current_end))
+                acc_text = block_text
+                current_start = block_start
+                current_end = block_end
+
+        if acc_text:
+            chunks.append((acc_text, current_start, current_end))
+
+        return chunks
 
     def _process_md(self, file_path: Path) -> list[tuple[str, int, int]]:
         """Splits a Markdown file into logical text segments.
@@ -92,6 +176,7 @@ class FileChunker:
         if not blocks:
             return []
 
+        # Greedy packing
         chunks: list[tuple[str, int, int]] = []
 
         acc_text: str = blocks[0][0]
@@ -113,7 +198,8 @@ class FileChunker:
                 current_end = block_end
 
         # Save last accumulated chunk after loop end
-        chunks.append((acc_text, current_start, current_end))
+        if acc_text:
+            chunks.append((acc_text, current_start, current_end))
         return chunks
 
     def process_file(self, file_path: Path) -> list[MinimalSource]:
