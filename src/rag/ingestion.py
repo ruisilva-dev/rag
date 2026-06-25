@@ -58,6 +58,20 @@ class FileChunker:
         return []
 
     def _process_md(self, file_path: Path) -> list[tuple[str, int, int]]:
+        """Splits a Markdown file into logical text segments.
+
+        Reads the file content and splits it by double newlines to isolate
+        paragraphs. It then greedily packs these paragraphs into chunks that
+        respect the maximum chunk size, preserving exact character indices.
+
+        Args:
+            file_path (Path): The path to the Markdown file.
+
+        Returns:
+            list[tuple[str, int, int]]: A list of chunks, where each tuple
+                contains the chunk text, the absolute starting character index,
+                and the absolute ending character index.
+        """
         content: str = file_path.read_text(encoding="utf-8")
         current_start: int = 0
 
@@ -75,9 +89,32 @@ class FileChunker:
             final_text = content[current_start:len(content)]
             blocks.append((final_text, current_start, len(content)))
 
-        acc_text: str = ""
-        current_start = 0
-        current_end: int = 0
+        if not blocks:
+            return []
+
+        chunks: list[tuple[str, int, int]] = []
+
+        acc_text: str = blocks[0][0]
+        current_start = blocks[0][1]
+        current_end: int = blocks[0][2]
+
+        for block_text, block_start, block_end in blocks[1:]:
+            # Check if block_text will exceed chunk capacity
+            # Add 2 for "\n\n" that was skipped earlier and will be added now
+            if len(acc_text) + 2 + len(block_text) <= self.max_chunk_size:
+                acc_text += "\n\n" + block_text
+                current_end = block_end
+            else:
+                # Chunk is full
+                chunks.append((acc_text, current_start, current_end))
+
+                acc_text = block_text
+                current_start = block_start
+                current_end = block_end
+
+        # Save last accumulated chunk after loop end
+        chunks.append((acc_text, current_start, current_end))
+        return chunks
 
     def process_file(self, file_path: Path) -> list[MinimalSource]:
         """Reads a file and delegates it to the correct parser.
