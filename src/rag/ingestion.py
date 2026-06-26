@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Generator, Callable
+import sys
 import itertools
 import re
 from rag.models import MinimalSource
@@ -237,6 +238,12 @@ class FileChunker:
                 )
             return sources
 
+        except (OSError, UnicodeDecodeError) as e:
+            print(f"Error processing file {file_path}: {e}", file=sys.stderr)
+            return []
         except Exception as e:
-            print(f"Error processing file {file_path}: {e}")
+            print(
+                f"Unexpected error processing file {file_path}: {e}",
+                file=sys.stderr
+            )
             return []
