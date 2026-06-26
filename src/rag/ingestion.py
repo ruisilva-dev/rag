@@ -227,7 +227,7 @@ class FileChunker:
 
             # Package the raw chunks into Pydantic models
             sources = []
-            for text, start, end in raw_chunks:
+            for _, start, end in raw_chunks:
                 sources.append(
                     MinimalSource(
                         file_path=str(file_path),
