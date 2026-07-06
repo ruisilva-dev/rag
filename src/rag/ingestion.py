@@ -70,7 +70,9 @@ class FileChunker:
 
         Reads the file content and isolates functions and classes using regex.
         Greedily packs these blocks into chunks. If a single function exceeds
-        the maximum size, it falls back to line-by-line splitting.
+        the maximum size, it falls back to line-by-line splitting. If any
+        individual line still exceeds the maximum size, it applies a final
+        character-by-character subdivision.
 
         Args:
             file_path (Path): The path to the Python file.
@@ -122,6 +124,25 @@ class FileChunker:
 
                 for line in lines:
                     line_len: int = len(line)
+                    # Handle oversized line character-by-chracter
+                    if line_len > self.max_chunk_size:
+                        # Save anything accumulated up until now
+                        if sub_acc:
+                            chunks.append((sub_acc, sub_start, sub_end))
+                            local_offset += len(sub_acc) + 1
+                            sub_acc = ""
+
+                        # Slice the line character-by-chracter
+                        for i in range(0, line_len, self.max_chunk_size):
+                            curr_slice: str = line[i:i + self.max_chunk_size]
+                            slice_start: int = block_start + local_offset + i
+                            slice_end: int = slice_start + len(curr_slice)
+
+                            chunks.append((curr_slice, slice_start, slice_end))
+
+                        local_offset += line_len + 1
+                        continue
+
                     if not sub_acc:
                         sub_start = block_start + local_offset
                         sub_acc = line
@@ -163,9 +184,10 @@ class FileChunker:
         """Splits a Markdown file into logical text segments.
 
         Reads the file content and splits it by double newlines to isolate
-        paragraphs. Greedily packs these paragraphs into chunks that respect
-        the maximum chunk size. If a single paragraph exceeds the maximum size,
-        it falls back to a line-by-line split.
+        paragraphs. Greedily packs these paragraphs into chunks. If a single
+        paragraph exceeds the maximum size, it falls back to line-by-line
+        splitting. If any individual line still exceeds the maximum size, it
+        applies a final character-by-character subdivision.
 
         Args:
             file_path (Path): The path to the Markdown file.
@@ -218,6 +240,25 @@ class FileChunker:
 
                 for line in lines:
                     line_len: int = len(line)
+                    # Handle oversized line character-by-chracter
+                    if line_len > self.max_chunk_size:
+                        # Save anything accumulated up until now
+                        if sub_acc:
+                            chunks.append((sub_acc, sub_start, sub_end))
+                            local_offset += len(sub_acc) + 1
+                            sub_acc = ""
+
+                        # Slice the line character-by-chracter
+                        for i in range(0, line_len, self.max_chunk_size):
+                            curr_slice: str = line[i:i + self.max_chunk_size]
+                            slice_start: int = block_start + local_offset + i
+                            slice_end: int = slice_start + len(curr_slice)
+
+                            chunks.append((curr_slice, slice_start, slice_end))
+
+                        local_offset += line_len + 1
+                        continue
+
                     if not sub_acc:
                         sub_start = block_start + local_offset
                         sub_acc = line
