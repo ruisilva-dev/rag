@@ -78,7 +78,9 @@ class BM25Indexer:
             )
 
             for i, raw_string in enumerate(raw_chunk_strings):
-                tokenized_document: list[str] = tokenize(raw_string)
+                header_trail = " > ".join(file_sources[i].context_headers)
+                combined_string = f"{header_trail}\n{raw_string}"
+                tokenized_document: list[str] = tokenize(combined_string)
                 corpus.append(tokenized_document)
 
                 self.indexed_sources.append(file_sources[i])

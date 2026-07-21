@@ -108,39 +108,41 @@ def test_multi_chunk_py(tmp_path: Path) -> None:
 
 
 def test_multi_chunk_md(tmp_path: Path) -> None:
-    """Verifies Markdown paragraph splitting when size limits are exceeded.
+    """Verifies Markdown paragraph splitting and context header tracking.
 
     Validates that separate paragraphs are allocated into separate chunks if
-    combining them violates the maximum character boundary constraint.
+    combining them violates size constraints, and ensures each chunk retains
+    its specific active section headers.
 
     Args:
         tmp_path: A pytest fixture providing a temporary directory path.
     """
-    para_one = "First paragraph content here.\n\n"
-    para_two = "Second paragraph content here."
-    content = para_one + para_two
+    content = (
+        "# Section One\n"
+        "Content for the first section.\n"
+        "# Section Two\n"
+        "Content for the second section."
+    )
 
     mock_md = tmp_path / "multi_chunk.md"
     mock_md.write_text(content, encoding="utf-8")
 
-    # Force split between paragraphs
-    chunker = FileChunker(max_chunk_size=len(para_one))
+    # Force split between headers
+    chunker = FileChunker(max_chunk_size=60)
     sources = chunker.process_file(mock_md)
 
     assert len(sources) == 2
     assert sources[0].first_character_index == 0
-    # Strip trailing double newline match boundary
-    assert sources[0].last_character_index == len(para_one) - 2
-    assert sources[1].first_character_index == len(para_one)
-    assert sources[1].last_character_index == len(content)
+    assert sources[0].context_headers == ["Section One"]
+    assert sources[1].context_headers == ["Section Two"]
 
 
 def test_chunk_fallback_line_py(tmp_path: Path) -> None:
-    """Tests the line-by-line fallback strategy for large Python blocks.
+    """Tests line-by-line fallback and context preservation for Python.
 
-    Verifies that a function code block exceeding max_chunk_size is
-    successfully partitioned into independent line-based sub-chunks,
-    provided that no individual line exceeds the chunk limit.
+    Verifies that an oversized code block is partitioned into line-based
+    sub-chunks under the size limit, and ensures that every sub-chunk
+    correctly retains the parent class or function context headers.
 
     Args:
         tmp_path: A pytest fixture providing a temporary directory path.
@@ -165,6 +167,10 @@ def test_chunk_fallback_line_py(tmp_path: Path) -> None:
     assert sources[-1].last_character_index == len(content)
     assert all(
         (s.last_character_index - s.first_character_index) <= max_size
+        for s in sources
+    )
+    assert all(
+        s.context_headers == ["def giant_function_definition()"]
         for s in sources
     )
 
@@ -199,16 +205,17 @@ def test_chunk_fallback_char_py(tmp_path: Path) -> None:
 
 
 def test_chunk_fallback_line_md(tmp_path: Path) -> None:
-    """Tests the line-by-line fallback strategy for large Markdown blocks.
+    """Tests line-by-line fallback and context preservation for Markdown.
 
-    Verifies that a paragraph block exceeding max_chunk_size is successfully
-    partitioned into independent line-based sub-chunks, provided that no
-    individual line exceeds the chunk limit.
+    Verifies that an oversized paragraph block is partitioned into line-based
+    sub-chunks under the size limit, and ensures that every sub-chunk
+    correctly retains the parent section context headers.
 
     Args:
         tmp_path: A pytest fixture providing a temporary directory path.
     """
     content = (
+        "# Documentation\n"
         "Short line one.\n"
         "Short line two.\n"
         "Short line three."
@@ -228,6 +235,7 @@ def test_chunk_fallback_line_md(tmp_path: Path) -> None:
         (s.last_character_index - s.first_character_index) <= max_size
         for s in sources
     )
+    assert all(s.context_headers == ["Documentation"] for s in sources)
 
 
 def test_chunk_fallback_char_md(tmp_path: Path) -> None:
@@ -292,3 +300,63 @@ def test_chunk_error_md(tmp_path: Path) -> None:
 
     sources = chunker.process_file(non_existent_file)
     assert sources == []
+
+
+def test_context_headers_py(tmp_path: Path) -> None:
+    """Verifies Python class and method hierarchies are tracked in metadata.
+
+    Ensures that the indentation-based parsing successfully identifies nested
+    classes and methods, pushing them onto the active headers stack so that
+    chunks retain their complete structural lineage.
+
+    Args:
+        tmp_path: A pytest fixture providing a temporary directory path.
+    """
+    content = (
+        "class DataModel:\n"
+        "    def entry_point(self):\n"
+        "        x = 1\n"
+    )
+    mock_py = tmp_path / "context_test.py"
+    mock_py.write_text(content, encoding="utf-8")
+
+    chunker = FileChunker(max_chunk_size=2000)
+    sources = chunker.process_file(mock_py)
+
+    # The final chunk contains the body "x = 1"
+    assert len(sources) == 1
+    assert sources[0].context_headers == [
+        "class DataModel", "    def entry_point(self)"
+    ]
+
+
+def test_context_headers_md(tmp_path: Path) -> None:
+    """Verifies Markdown header nesting and popping hierarchies are tracked.
+
+    Ensures that deeper header levels are appended to the context stack, and
+    that returning to a higher-level header correctly pops out any deeper,
+    obsolete headings.
+
+    Args:
+        tmp_path: A pytest fixture providing a temporary directory path.
+    """
+    content = (
+        "# Setup\n"
+        "Content here.\n"
+        "## Installation\n"
+        "More content here.\n"
+        "# Usage\n"
+        "Run the main script."
+    )
+    mock_md = tmp_path / "context_test.md"
+    mock_md.write_text(content, encoding="utf-8")
+
+    # Use a small chunk size to force each section into its own chunk
+    chunker = FileChunker(max_chunk_size=40)
+    sources = chunker.process_file(mock_md)
+
+    assert len(sources) >= 3
+    # The first chunk under '# Setup'
+    assert sources[0].context_headers == ["Setup"]
+    # The chunk that reaches the end under '# Usage'
+    assert sources[-1].context_headers == ["Usage"]
