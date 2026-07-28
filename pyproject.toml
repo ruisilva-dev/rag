@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "bm25s>=0.3.9",
+    "fire>=0.7.1",
     "pydantic>=2.13.4",
 ]
 
@@ -20,6 +21,6 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[[tool.mypy.overrides]]
-module = "bm25s.*"
+[tool.mypy]
+modules = ["bm25s", "fire"]
 ignore_missing_imports = true
