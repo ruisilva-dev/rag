@@ -4,7 +4,7 @@ import sys
 import json
 import pydantic
 from pathlib import Path
-from rag.models import MinimalSource, RagDataset
+from rag.models import MinimalSource, RagDataset, StudentSearchResults
 from rag.ingestion import FileDiscoverer, FileChunker
 from rag.bm25.indexer import BM25Indexer
 from rag.bm25.engine import BM25SearchEngine
@@ -17,6 +17,7 @@ class CLI:
 
     Provides commands to build the BM25 index and search datasets.
     """
+
     def index(
         self,
         repo_path: str = "data/raw/vllm-0.10.1",
@@ -31,19 +32,84 @@ class CLI:
             max_chunk_size (int): Maximum character limit per chunk.
         """
         gen = FileDiscoverer(repo_path).discover_files()
+        chunker = FileChunker(max_chunk_size)
 
-        sources: list[MinimalSource] = []
+        code_sources: list[MinimalSource] = []
+        docs_sources: list[MinimalSource] = []
+
+        # Separate sources into code vs docs
         for file_path in gen:
-            sources.extend(FileChunker(max_chunk_size).process_file(file_path))
+            processed_sources = chunker.process_file(file_path)
+            if file_path.suffix == ".py":
+                code_sources.extend(processed_sources)
+            else:
+                docs_sources.extend(processed_sources)
 
-        indexer = BM25Indexer()
-        retriever = bm25s.BM25()
+        sub_indices: list[tuple[str, list[MinimalSource]]] = [
+            ("code", code_sources),
+            ("docs", docs_sources)
+        ]
 
-        corpus = indexer.build_corpus(sources)
-        retriever.index(corpus)
+        for domain, sources in sub_indices:
+            sub_dir = Path(save_dir) / domain
+            sub_dir.mkdir(parents=True, exist_ok=True)
 
-        Path(save_dir).mkdir(parents=True, exist_ok=True)
-        indexer.save(save_dir, retriever)
+            indexer = BM25Indexer()
+            corpus = indexer.build_corpus(sources)
+
+            retriever = bm25s.BM25()
+            retriever.index(corpus)
+
+            indexer.save(str(sub_dir), retriever)
+
+    def search(
+        self,
+        query_string: str,
+        k: int = 10,
+        save_directory: str = "data/output/search_results",
+        index_dir: str = DEFAULT_INDEX_DIR,
+    ) -> None:
+        """Searches the indexed codebase for a single query string.
+
+        Args:
+            query_string (str): The search query to evaluate against the index.
+            k (int): Number of relevant sources to retrieve. Defaults to 10.
+            save_directory (str): Directory to store search outputs.
+            index_dir (str): Directory containing the BM25 index.
+        """
+        try:
+            searcher = BM25SearchEngine.load_from_disk(index_dir)
+        except FileNotFoundError:
+            print(
+                "Error: No index found in index directory. "
+                "Please run the index function first",
+                file=sys.stderr
+            )
+            return
+        except OSError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return
+        except (json.JSONDecodeError, pydantic.ValidationError):
+            print(
+                "Error: Index appears to be corrupt or invalid. "
+                "Try running the index function again.",
+                file=sys.stderr
+            )
+            return
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}", file=sys.stderr)
+            return
+
+        minimal_results = searcher.search_to_model("1", query_string, k)
+        final_results = StudentSearchResults(
+            search_results=[minimal_results], k=k
+        )
+
+        raw_json = final_results.model_dump_json(by_alias=True, indent=4)
+
+        output_file = Path(save_directory) / "single_search_public.json"
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_file.write_text(raw_json)
 
     def search_dataset(
         self,
@@ -56,7 +122,7 @@ class CLI:
 
         Args:
             dataset_path (str): Path to the JSON dataset.
-            k (int): Number of relevant sources to retrieve.
+            k (int): Number of relevant sources to retrieve. Defaults to 10.
             save_directory (str): Directory to store search outputs.
             index_dir (str): Directory containing the BM25 index.
         """

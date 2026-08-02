@@ -8,6 +8,7 @@ dependencies = [
     "bm25s>=0.3.9",
     "fire>=0.7.1",
     "pydantic>=2.13.4",
+    "pystemmer>=3.1.0",
 ]
 
 [dependency-groups]

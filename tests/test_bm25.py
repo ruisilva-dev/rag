@@ -24,22 +24,27 @@ def searcher() -> BM25SearchEngine:
     Returns:
         BM25SearchEngine: An uninitialized searcher instance.
     """
-    return BM25SearchEngine(bm25s.BM25(), [])
+    return BM25SearchEngine(bm25s.BM25(), bm25s.BM25(), [], [])
 
 
 def test_tokenizer() -> None:
     """Verifies that the tokenizer handles code syntax and edge cases.
 
     Ensures that text normalization lowercases strings, handles whitespace
-    variations, ignores pure punctuation, and preserves snake_case
-    identifiers.
+    variations, ignores pure punctuation, and processes snake_case and
+    camelCase based on the domain flag.
     """
-    assert tokenize("Hello; there. snake_case?") == [
+    assert tokenize("Hello; there. snake_case?", is_code=False) == [
         "hello", "there", "snake_case"
     ]
-    assert tokenize("python3 version_2") == ["python3", "version_2"]
-    assert tokenize(";;;    !!!") == []
-    assert tokenize("hello\tworld\npython   code") == [
+    assert tokenize("Hello; there. snake_case?", is_code=True) == [
+        "hello", "there", "snake", "case"
+    ]
+    assert tokenize("python3 version_2", is_code=False) == [
+        "python3", "version_2"
+    ]
+    assert tokenize(";;;    !!!", is_code=False) == []
+    assert tokenize("hello\tworld\npython   code", is_code=False) == [
         "hello", "world", "python", "code"
     ]
 
@@ -149,7 +154,8 @@ def test_batch_search_empty(searcher: BM25SearchEngine) -> None:
     Args:
         searcher: A pytest fixture providing a BM25SearchEngine instance.
     """
-    searcher.retriever.index([["dummy"]])
+    searcher.indices["code"].retriever.index([["dummy"]])
+    searcher.indices["docs"].retriever.index([["dummy"]])
 
     batch_result = searcher.batch_search(
         questions=[],
@@ -160,9 +166,7 @@ def test_batch_search_empty(searcher: BM25SearchEngine) -> None:
     assert batch_result.search_results == []
 
 
-def test_search_accuracy(
-    indexer: BM25Indexer, searcher: BM25SearchEngine, tmp_path: Path
-) -> None:
+def test_search_accuracy(indexer: BM25Indexer, tmp_path: Path) -> None:
     """Validates that search ranks relevant documents over irrelevant ones.
 
     Ensures that the trained BM25 retrieval engine successfully selects the
@@ -170,15 +174,14 @@ def test_search_accuracy(
 
     Args:
         indexer: A pytest fixture providing a BM25Indexer instance.
-        searcher: A pytest fixture providing a BM25SearchEngine instance.
         tmp_path: A pytest fixture providing a temporary directory path.
     """
-    mock_file_acc = tmp_path / "accurate"
+    mock_file_acc = tmp_path / "accurate.md"
     mock_file_acc_content = (
         "This function establishes a secure database "
         "connection using a postgreSQL client."
     )
-    mock_file_inacc = tmp_path / "inaccurate"
+    mock_file_inacc = tmp_path / "inaccurate.md"
     mock_file_inacc_content = (
         "A utility function to render the user profile avatar graphics on the "
         "dashboard."
@@ -200,27 +203,35 @@ def test_search_accuracy(
 
     corpus = indexer.build_corpus([accurate_source, inaccurate_source])
 
-    searcher.indexed_sources = indexer.indexed_sources
-    searcher.retriever.index(corpus)
+    docs_retriever = bm25s.BM25()
+    docs_retriever.index(corpus)
+    code_retriever = bm25s.BM25()
+    code_retriever.index([["dummy"]])
 
-    most_accurate = searcher.search("database connection", 1)
+    searcher = BM25SearchEngine(
+        code_retriever=code_retriever,
+        docs_retriever=docs_retriever,
+        code_sources=[],
+        docs_sources=indexer.indexed_sources
+    )
+
+    most_accurate = searcher.search("database connection", limit=1)
 
     assert most_accurate[0] == accurate_source
     assert len(most_accurate) == 1
 
 
 def test_search_excessive_limit(
-    indexer: BM25Indexer, searcher: BM25SearchEngine, tmp_path: Path
+    indexer: BM25Indexer, tmp_path: Path
 ) -> None:
     """Verifies that searching with a limit higher than corpus size behaves.
 
     Ensures that when the requested limit exceeds the total number of indexed
-    documents, the engine gracefully ignores internal padding values (-1)
-    instead of duplicating the final document.
+    documents, the engine gracefully handles padding values instead of
+    duplicating the final document.
 
     Args:
         indexer: A pytest fixture providing a BM25Indexer instance.
-        searcher: A pytest fixture providing a BM25SearchEngine instance.
         tmp_path: A pytest fixture providing a temporary directory path.
     """
     mock_file = tmp_path / "single.txt"
@@ -234,10 +245,18 @@ def test_search_excessive_limit(
 
     corpus = indexer.build_corpus([source])
 
-    searcher.indexed_sources = indexer.indexed_sources
-    searcher.retriever.index(corpus)
+    docs_retriever = bm25s.BM25()
+    docs_retriever.index(corpus)
+    code_retriever = bm25s.BM25()
+    code_retriever.index([["dummy"]])
 
-    # Request a limit of 5 when only 1 document exists
+    searcher = BM25SearchEngine(
+        code_retriever=code_retriever,
+        docs_retriever=docs_retriever,
+        code_sources=[],
+        docs_sources=indexer.indexed_sources
+    )
+
     results = searcher.search("data science", limit=5)
 
     assert len(results) == 1
@@ -245,9 +264,7 @@ def test_search_excessive_limit(
     assert results[0] == source
 
 
-def test_search_to_model(
-    indexer: BM25Indexer, searcher: BM25SearchEngine, tmp_path: Path
-) -> None:
+def test_search_to_model(indexer: BM25Indexer, tmp_path: Path) -> None:
     """Validates that search_to_model returns the correct Pydantic object.
 
     Ensures that the resulting MinimalSearchResults object maps fields like
@@ -255,7 +272,6 @@ def test_search_to_model(
 
     Args:
         indexer: A pytest fixture providing a BM25Indexer instance.
-        searcher: A pytest fixture providing a BM25SearchEngine instance.
         tmp_path: A pytest fixture providing a temporary directory path.
     """
     mock_file = tmp_path / "model_test.py"
@@ -270,8 +286,17 @@ def test_search_to_model(
 
     corpus = indexer.build_corpus([source])
 
-    searcher.indexed_sources = indexer.indexed_sources
-    searcher.retriever.index(corpus)
+    code_retriever = bm25s.BM25()
+    code_retriever.index(corpus)
+    docs_retriever = bm25s.BM25()
+    docs_retriever.index([["dummy"]])
+
+    searcher = BM25SearchEngine(
+        code_retriever=code_retriever,
+        docs_retriever=docs_retriever,
+        code_sources=indexer.indexed_sources,
+        docs_sources=[]
+    )
 
     result = searcher.search_to_model(
         question_id="q_single",
@@ -285,9 +310,7 @@ def test_search_to_model(
     assert result.retrieved_sources[0] == source
 
 
-def test_batch_search(
-    indexer: BM25Indexer, searcher: BM25SearchEngine, tmp_path: Path
-) -> None:
+def test_batch_search(indexer: BM25Indexer, tmp_path: Path) -> None:
     """Validates that batch_search aggregates queries into a container.
 
     Ensures that executing batch searches accurately returns a structured
@@ -295,7 +318,6 @@ def test_batch_search(
 
     Args:
         indexer: A pytest fixture providing a BM25Indexer instance.
-        searcher: A pytest fixture providing a BM25SearchEngine instance.
         tmp_path: A pytest fixture providing a temporary directory path.
     """
     mock_file = tmp_path / "batch_test.md"
@@ -310,8 +332,17 @@ def test_batch_search(
 
     corpus = indexer.build_corpus([source])
 
-    searcher.indexed_sources = indexer.indexed_sources
-    searcher.retriever.index(corpus)
+    docs_retriever = bm25s.BM25()
+    docs_retriever.index(corpus)
+    code_retriever = bm25s.BM25()
+    code_retriever.index([["dummy"]])
+
+    searcher = BM25SearchEngine(
+        code_retriever=code_retriever,
+        docs_retriever=docs_retriever,
+        code_sources=[],
+        docs_sources=indexer.indexed_sources
+    )
 
     question = UnansweredQuestion(
         question_id="q_batch_1",
@@ -332,34 +363,48 @@ def test_batch_search(
 
 
 def test_save_and_load(indexer: BM25Indexer, tmp_path: Path) -> None:
-    """Validates that indexed_sources metadata survives disk serialization.
+    """Validates that sub-indices metadata survives disk serialization.
 
-    Ensures that calling save correctly writes out the tracking array and
-    that load_metadata successfully reconstructs the exact original state.
+    Ensures that calling save correctly writes out the domain tracking arrays
+    and that load_from_disk successfully reconstructs both sub-indices.
 
     Args:
         indexer: A pytest fixture providing a BM25Indexer instance.
         tmp_path: A pytest fixture providing a temporary directory path.
     """
-    save_dir = tmp_path / "index_storage"
-    save_dir.mkdir()
+    save_dir = tmp_path / "bm25_index"
+    code_dir = save_dir / "code"
+    docs_dir = save_dir / "docs"
+    code_dir.mkdir(parents=True, exist_ok=True)
+    docs_dir.mkdir(parents=True, exist_ok=True)
 
-    mock_source = MinimalSource(
+    mock_code_source = MinimalSource(
         file_path="main.py",
         first_character_index=12,
         last_character_index=45
     )
-    indexer.indexed_sources = [mock_source]
+    mock_docs_source = MinimalSource(
+        file_path="readme.md",
+        first_character_index=0,
+        last_character_index=30
+    )
 
-    # Initialize a dummy retriever to satisfy internal save constraints
-    retriever = bm25s.BM25()
-    retriever.index([["dummy", "tokens"]])
+    # Build & save code sub-index
+    indexer.indexed_sources = [mock_code_source]
+    code_retriever = bm25s.BM25()
+    code_retriever.index([["def", "main"]])
+    indexer.save(str(code_dir), code_retriever)
 
-    # Serialize the state to the temporary directory
-    indexer.save(str(save_dir), retriever)
+    # Build & save docs sub-index
+    indexer.indexed_sources = [mock_docs_source]
+    docs_retriever = bm25s.BM25()
+    docs_retriever.index([["readme", "documentation"]])
+    indexer.save(str(docs_dir), docs_retriever)
 
-    # Reconstruct the tracking state into a completely fresh indexer
+    # Reconstruct both sub-indices from disk
     searcher = BM25SearchEngine.load_from_disk(str(save_dir))
 
-    assert len(searcher.indexed_sources) == 1
-    assert searcher.indexed_sources[0] == mock_source
+    assert len(searcher.indices["code"].sources) == 1
+    assert searcher.indices["code"].sources[0] == mock_code_source
+    assert len(searcher.indices["docs"].sources) == 1
+    assert searcher.indices["docs"].sources[0] == mock_docs_source
