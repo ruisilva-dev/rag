@@ -1,13 +1,10 @@
 from __future__ import annotations
 import json
+import bm25s
+import Stemmer
 from pathlib import Path
 from collections import defaultdict
-from typing import TYPE_CHECKING
 from rag.models import MinimalSource
-from rag.bm25.utils import tokenize
-
-if TYPE_CHECKING:
-    import bm25s
 
 
 class BM25Indexer:
@@ -47,7 +44,9 @@ class BM25Indexer:
 
         return extracted_texts
 
-    def build_corpus(self, sources: list[MinimalSource]) -> list[list[str]]:
+    def build_corpus(
+        self, sources: list[MinimalSource]
+    ) -> list[list[str]] | bm25s.tokenization.Tokenized:
         """Groups sources by file, extracts text, and builds a corpus.
 
         Note:
@@ -60,7 +59,8 @@ class BM25Indexer:
                 chunk sources.
 
         Returns:
-            list[list[str]]: A tokenized corpus ready for the BM25.
+            list[list[str]] | bm25s.tokenization.Tokenized: A tokenized corpus
+                ready for the BM25.
         """
         self.indexed_sources = []
         sources_by_file: defaultdict[str, list[MinimalSource]] = (
@@ -70,7 +70,9 @@ class BM25Indexer:
         for source in sources:
             sources_by_file[source.file_path].append(source)
 
-        corpus: list[list[str]] = []
+        texts: list[str] = []
+        stemmer = Stemmer.Stemmer("english")
+        stop_words: list[str] = list(bm25s.stopwords.STOPWORDS_EN_PLUS)
 
         for file_path, file_sources in sources_by_file.items():
             raw_chunk_strings: list[str] = self._extract_file_chunks(
@@ -80,15 +82,14 @@ class BM25Indexer:
             for i, raw_string in enumerate(raw_chunk_strings):
                 header_trail = " > ".join(file_sources[i].context_headers)
                 combined_string = f"{file_path}: {header_trail}\n{raw_string}"
-                tokenized_document: list[str] = tokenize(
-                    combined_string,
-                    is_code=".py" in file_path
-                )
-                corpus.append(tokenized_document)
-
+                texts.append(combined_string)
                 self.indexed_sources.append(file_sources[i])
 
-        return corpus
+        corpus_tokens = bm25s.tokenize(
+            texts, stemmer=stemmer, stopwords=stop_words
+        )
+
+        return corpus_tokens
 
     def save(self, save_dir: str, retriever: bm25s.BM25) -> None:
         """Saves BM25 index matrix and custom source metadata to disk.

@@ -32,35 +32,19 @@ class CLI:
             max_chunk_size (int): Maximum character limit per chunk.
         """
         gen = FileDiscoverer(repo_path).discover_files()
-        chunker = FileChunker(max_chunk_size)
 
-        code_sources: list[MinimalSource] = []
-        docs_sources: list[MinimalSource] = []
-
-        # Separate sources into code vs docs
+        sources: list[MinimalSource] = []
         for file_path in gen:
-            processed_sources = chunker.process_file(file_path)
-            if file_path.suffix == ".py":
-                code_sources.extend(processed_sources)
-            else:
-                docs_sources.extend(processed_sources)
+            sources.extend(FileChunker(max_chunk_size).process_file(file_path))
 
-        sub_indices: list[tuple[str, list[MinimalSource]]] = [
-            ("code", code_sources),
-            ("docs", docs_sources)
-        ]
+        indexer = BM25Indexer()
+        retriever = bm25s.BM25()
 
-        for domain, sources in sub_indices:
-            sub_dir = Path(save_dir) / domain
-            sub_dir.mkdir(parents=True, exist_ok=True)
+        corpus = indexer.build_corpus(sources)
+        retriever.index(corpus)
 
-            indexer = BM25Indexer()
-            corpus = indexer.build_corpus(sources)
-
-            retriever = bm25s.BM25()
-            retriever.index(corpus)
-
-            indexer.save(str(sub_dir), retriever)
+        Path(save_dir).mkdir(parents=True, exist_ok=True)
+        indexer.save(save_dir, retriever)
 
     def search(
         self,
