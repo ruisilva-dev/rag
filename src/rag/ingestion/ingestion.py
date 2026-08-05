@@ -3,6 +3,7 @@ from typing import Generator, Callable
 import sys
 import itertools
 import re
+import ast
 from rag.models import MinimalSource
 
 
@@ -286,35 +287,25 @@ class FileChunker:
         return chunks
 
     def _process_py(self, file_path: Path) -> ChunkData:
-        """Splits a Python file into logical code blocks.
-
-        Reads the file content and isolates functions and classes using regex.
-        Greedily packs these blocks into chunks. If a single function exceeds
-        the maximum size, it falls back to line-by-line splitting. If any
-        individual line still exceeds the maximum size, it applies a final
-        character-by-character subdivision.
-
-        Args:
-            file_path (Path): The path to the Python file.
-
-        Returns:
-            ChunkData: A list of chunks, where each tuple contains the chunk
-                text, the absolute starting character index, and the absolute
-                ending character index.
-        """
         content: str = file_path.read_text(encoding="utf-8")
-        pattern: str = r"^[ \t]*(def |class )"
 
-        blocks: ChunkData = self._extract_blocks(
-            content, pattern, None, str.rstrip, " :"
-        )
-
-        if not blocks:
+        try:
+            tree: ast.Module = ast.parse(content)
+        except (ValueError, SyntaxError) as e:
+            print(
+                f"Error when processing file {file_path}: {e}. ",
+                "Returning an empty chunk for this file.",
+                file=sys.stderr
+            )
             return []
 
-        chunks: ChunkData = self._pack_blocks(blocks, "\n")
+        line_starts: list[int] = [0]
 
-        return chunks
+        for i, line in enumerate(content.splitlines()):
+            curr_start: int = line_starts[i]
+            next_start: int = curr_start + len(line) + 1
+
+            line_starts.append(next_start)
 
     def _process_md(self, file_path: Path) -> ChunkData:
         """Splits a Markdown file into logical text segments.
