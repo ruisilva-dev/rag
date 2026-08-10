@@ -1,13 +1,13 @@
+"""Command-line interface entry point for the RAG pipeline."""
+
 import fire
 import bm25s
-import sys
-import json
-import pydantic
 from pathlib import Path
 from rag.models import MinimalSource, RagDataset, StudentSearchResults
 from rag.ingestion import FileDiscoverer, FileChunker
 from rag.bm25.indexer import BM25Indexer
 from rag.bm25.engine import BM25SearchEngine
+from rag.utils import catch_cli_errors
 
 DEFAULT_INDEX_DIR = "data/processed/bm25_index"
 
@@ -18,6 +18,7 @@ class CLI:
     Provides commands to build the BM25 index and search datasets.
     """
 
+    @catch_cli_errors
     def index(
         self,
         repo_path: str = "data/raw/vllm-0.10.1",
@@ -46,6 +47,7 @@ class CLI:
         Path(save_dir).mkdir(parents=True, exist_ok=True)
         indexer.save(save_dir, retriever)
 
+    @catch_cli_errors
     def search(
         self,
         query_string: str,
@@ -61,28 +63,7 @@ class CLI:
             save_directory (str): Directory to store search outputs.
             index_dir (str): Directory containing the BM25 index.
         """
-        try:
-            searcher = BM25SearchEngine.load_from_disk(index_dir)
-        except FileNotFoundError:
-            print(
-                "Error: No index found in index directory. "
-                "Please run the index function first",
-                file=sys.stderr
-            )
-            return
-        except OSError as e:
-            print(f"Error: {e}", file=sys.stderr)
-            return
-        except (json.JSONDecodeError, pydantic.ValidationError):
-            print(
-                "Error: Index appears to be corrupt or invalid. "
-                "Try running the index function again.",
-                file=sys.stderr
-            )
-            return
-        except Exception as e:
-            print(f"An unexpected error occurred: {e}", file=sys.stderr)
-            return
+        searcher = BM25SearchEngine.load_from_disk(index_dir)
 
         minimal_results = searcher.search_to_model("1", query_string, k)
         final_results = StudentSearchResults(
@@ -95,6 +76,7 @@ class CLI:
         output_file.parent.mkdir(parents=True, exist_ok=True)
         output_file.write_text(raw_json)
 
+    @catch_cli_errors
     def search_dataset(
         self,
         dataset_path: str,
@@ -110,49 +92,10 @@ class CLI:
             save_directory (str): Directory to store search outputs.
             index_dir (str): Directory containing the BM25 index.
         """
-        try:
-            searcher = BM25SearchEngine.load_from_disk(index_dir)
-        except FileNotFoundError:
-            print(
-                "Error: No index found in index directory. "
-                "Please run the index function first",
-                file=sys.stderr
-            )
-            return
-        except OSError as e:
-            print(f"Error: {e}", file=sys.stderr)
-            return
-        except (json.JSONDecodeError, pydantic.ValidationError):
-            print(
-                "Error: Index appears to be corrupt or invalid. "
-                "Try running the index function again.",
-                file=sys.stderr
-            )
-            return
-        except Exception as e:
-            print(f"An unexpected error occurred: {e}", file=sys.stderr)
-            return
+        searcher = BM25SearchEngine.load_from_disk(index_dir)
 
-        try:
-            raw_json: str = Path(dataset_path).read_text(encoding="utf-8")
-            dataset = RagDataset.model_validate_json(raw_json)
-        except FileNotFoundError:
-            print(
-                "Error: No dataset found in the given path.", file=sys.stderr
-            )
-            return
-        except OSError as e:
-            print(f"Error: {e}", file=sys.stderr)
-            return
-        except (json.JSONDecodeError, pydantic.ValidationError):
-            print(
-                "Error: Dataset appears to be corrupt or invalid.",
-                file=sys.stderr
-            )
-            return
-        except Exception as e:
-            print(f"An unexpected error occurred: {e}", file=sys.stderr)
-            return
+        dataset_content: str = Path(dataset_path).read_text(encoding="utf-8")
+        dataset = RagDataset.model_validate_json(dataset_content)
 
         results = searcher.batch_search(dataset.rag_questions, limit=k)
 

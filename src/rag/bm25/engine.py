@@ -1,3 +1,5 @@
+"""BM25 search engine for querying indexed document corpora."""
+
 from __future__ import annotations
 import json
 import bm25s
@@ -22,7 +24,13 @@ class BM25SearchEngine:
     def __init__(
         self, retriever: bm25s.BM25, sources: list[MinimalSource]
     ) -> None:
-        """Initializes a search engine with a loaded index."""
+        """Initializes search engine with index and source metadata.
+
+        Args:
+            retriever (bm25s.BM25): Loaded BM25 search index.
+            sources (list[MinimalSource]): Parallel list mapping index
+                positions back to original metadata sources.
+        """
         self.retriever: bm25s.BM25 = retriever
         self.sources: list[MinimalSource] = sources
 

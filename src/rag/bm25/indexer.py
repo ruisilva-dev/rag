@@ -1,3 +1,5 @@
+"""Corpus construction and BM25 indexing pipeline."""
+
 from __future__ import annotations
 import json
 import bm25s

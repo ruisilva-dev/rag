@@ -1,3 +1,5 @@
+"""File discovery and text chunking pipeline for Python and Markdown files."""
+
 from pathlib import Path
 from typing import Generator, Callable
 import sys
