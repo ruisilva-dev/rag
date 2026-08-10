@@ -1,12 +1,46 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
+import sys
 
 Chunk = tuple[str, int, int, list[str]]
 
 
 class BaseParser(ABC):
+    """Abstract base class for document and code parsers.
+
+    Attributes:
+        max_chunk_size: Maximum allowed character length for any chunk.
+    """
+
     def __init__(self, max_chunk_size: int) -> None:
+        """Initializes BaseParser with chunking size limit.
+
+        Args:
+            max_chunk_size: Maximum allowed character length per chunk.
+        """
         self.max_chunk_size: int = max_chunk_size
+
+    def _read_file(self, file_path: Path | str) -> str | None:
+        """Reads content from a target file as UTF-8 text.
+
+        Args:
+            file_path: Path to the target file to be read.
+
+        Returns:
+            The string content of the file, or None if reading fails.
+        """
+        try:
+            return Path(file_path).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as e:
+            print(
+                f"Warning: Skipping file '{file_path}': {e}", file=sys.stderr
+            )
+            return None
+        except Exception as e:
+            print(
+                f"Warning: Unexpected error in '{file_path}': {e}",
+                file=sys.stderr
+            )
 
     def _handle_fallback_split(
         self,
@@ -138,7 +172,12 @@ class BaseParser(ABC):
             ):
                 acc_text += sep + block_text
                 current_end = block_end
-                current_headers = headers
+
+                # Add new headers only
+                current_headers.extend([
+                    header for header in headers
+                    if header not in current_headers
+                ])
 
             # Chunk is full
             else:
@@ -160,4 +199,12 @@ class BaseParser(ABC):
 
     @abstractmethod
     def parse(self, file_path: Path) -> list[Chunk]:
+        """Parses a given file into a list of contextual chunks.
+
+        Args:
+            file_path: Path object pointing to the file to parse.
+
+        Returns:
+            A list of parsed Chunk tuples with context metadata.
+        """
         ...

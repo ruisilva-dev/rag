@@ -5,7 +5,7 @@ import json
 import pydantic
 from pathlib import Path
 from rag.models import MinimalSource, RagDataset, StudentSearchResults
-from rag.ingestion import FileDiscoverer, FileChunker
+from rag.ingestion.ingestion import FileDiscoverer, FileChunker
 from rag.bm25.indexer import BM25Indexer
 from rag.bm25.engine import BM25SearchEngine
 
