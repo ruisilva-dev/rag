@@ -2,10 +2,10 @@ install:
 	@uv sync
 
 run:
-	@uv run python3 -m rag
+	@uv run python3 -m src
 
 debug:
-	@uv run python3 -m pdb -m rag
+	@uv run python3 -m pdb -m src
 
 lint:
 	uv run flake8 .

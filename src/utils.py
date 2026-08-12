@@ -1,21 +1,23 @@
-from typing import Callable
+from typing import Callable, Any
 import sys
 import functools
 import json
 import pydantic
 
 
-def catch_cli_errors(func: Callable) -> Callable:
+def catch_cli_errors(func: Callable[..., Any]) -> Callable[..., Any]:
     """Catches CLI runtime errors and logs formatted messages to stderr.
 
     Args:
-        func (Callable): Target function to wrap with exception handling.
+        func (Callable[..., Any]): Target function to wrap with exception
+            handling.
 
     Returns:
-        Callable: The wrapped function with centralized error catching.
+        Callable[..., Any]: The wrapped function with centralized error
+            catching.
     """
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> None:
+    def wrapper(*args: Any, **kwargs: Any) -> None:
         try:
             func(*args, **kwargs)
         except OSError as e:
@@ -37,9 +39,13 @@ def catch_cli_errors(func: Callable) -> Callable:
                 msg = error["msg"]
                 print(f"  - Field '{field}': {msg}", file=sys.stderr)
             sys.exit(1)
+        except RuntimeError as e:
+            print(e, file=sys.stderr)
+            sys.exit(1)
         except Exception as e:
             print(
                 f"An unexpected error occurred ({type(e).__name__}): {str(e)}",
                 file=sys.stderr
             )
+            sys.exit(1)
     return wrapper

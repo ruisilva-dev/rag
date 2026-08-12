@@ -6,7 +6,7 @@ import bm25s
 import Stemmer
 from pathlib import Path
 from collections import defaultdict
-from rag.models import MinimalSource
+from src.models import MinimalSource
 
 
 class BM25Indexer:

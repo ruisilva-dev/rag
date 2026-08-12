@@ -4,8 +4,9 @@ from __future__ import annotations
 import json
 import bm25s
 import Stemmer
+from tqdm import tqdm
 from pathlib import Path
-from rag.models import (
+from src.models import (
     MinimalSource,
     MinimalSearchResults,
     StudentSearchResults,
@@ -69,8 +70,6 @@ class BM25SearchEngine:
         Returns:
             list[MinimalSource]: The top matching metadata sources.
         """
-        expanded_limit = limit * 10
-
         stemmer = Stemmer.Stemmer("english")
         stop_words: list[str] = list(bm25s.stopwords.STOPWORDS_EN_PLUS)
 
@@ -81,29 +80,26 @@ class BM25SearchEngine:
         if limit > len(self.sources):
             limit = len(self.sources)
 
-        if expanded_limit > len(self.sources):
-            expanded_limit = limit
-
-        indices, _ = self.retriever.retrieve(query_tokens, k=expanded_limit)
+        indices, _ = self.retriever.retrieve(query_tokens, k=limit)
 
         # bm25s returns a 2D array for batch queries
         # indices[0] gets the matches for our single query
         results: list[MinimalSource] = [self.sources[i] for i in indices[0]]
 
-        return results[:limit]
+        return results
 
     def search_to_model(
         self,
         question_id: str,
         query_string: str,
-        limit: int = 5
+        limit: int = 10
     ) -> MinimalSearchResults:
         """Searches the index and wraps results in a Pydantic model.
 
         Args:
             question_id (str): The unique identifier for the question.
             query_string (str): The raw search query string.
-            limit (int): Maximum number of results to return. Defaults to 5.
+            limit (int): Maximum number of results to return. Defaults to 10.
 
         Returns:
             MinimalSearchResults: Validated search results container.
@@ -115,27 +111,29 @@ class BM25SearchEngine:
         return MinimalSearchResults(
             question_id=question_id,
             question=query_string,
+            question_str=query_string,
             retrieved_sources=matching_sources
         )
 
     def batch_search(
         self,
         questions: list[UnansweredQuestion],
-        limit: int = 5
+        limit: int = 10
     ) -> StudentSearchResults:
         """Processes multiple queries into a StudentSearchResults container.
 
         Args:
             questions (list[UnansweredQuestion]): List of incoming unanswered
                 questions.
-            limit (int): Maximum number of results per question. Defaults to 5.
+            limit (int): Maximum number of results per question.
+                Defaults to 10.
 
         Returns:
             StudentSearchResults: The compiled batch results.
         """
         results: list[MinimalSearchResults] = []
 
-        for question in questions:
+        for question in tqdm(questions, desc="Searching dataset"):
             search_result = self.search_to_model(
                 question_id=question.question_id,
                 query_string=question.question,

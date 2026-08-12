@@ -37,7 +37,8 @@ class MinimalSearchResults(BaseModel):
     """Stores retrieved sources matching a single query."""
 
     question_id: str
-    question: str = Field(serialization_alias="question_str")
+    question: str
+    question_str: str
     retrieved_sources: list[MinimalSource]
 
 
@@ -54,8 +55,7 @@ class StudentSearchResults(BaseModel):
     k: int
 
 
-class StudentSearchResultsAndAnswer(BaseModel):
+class StudentSearchResultsAndAnswer(StudentSearchResults):
     """Collection wrapper for batch search results and answers."""
 
-    search_results: list[MinimalAnswer]
-    k: int
+    search_results: list[MinimalAnswer]  # type: ignore
