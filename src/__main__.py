@@ -48,7 +48,7 @@ class CLI:
 
         # Extract and chunk text
         sources: list[MinimalSource] = []
-        for file_path in gen:
+        for file_path in tqdm(gen, desc="Indexing files"):
             sources.extend(FileChunker(max_chunk_size).process_file(file_path))
 
         indexer = BM25Indexer()
