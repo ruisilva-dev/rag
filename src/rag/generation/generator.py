@@ -65,7 +65,7 @@ class AnswerGenerator:
 
         try:
             outputs = self.generator(
-                prompt,
+                str(prompt),
                 max_new_tokens=512,
                 clean_up_tokenization_spaces=False,
                 return_full_text=False,
