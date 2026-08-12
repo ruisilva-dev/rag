@@ -115,6 +115,7 @@ class BM25SearchEngine:
         return MinimalSearchResults(
             question_id=question_id,
             question=query_string,
+            question_str=query_string,
             retrieved_sources=matching_sources
         )
 

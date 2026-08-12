@@ -37,7 +37,8 @@ class MinimalSearchResults(BaseModel):
     """Stores retrieved sources matching a single query."""
 
     question_id: str
-    question: str = Field(serialization_alias="question_str")
+    question: str
+    question_str: str
     retrieved_sources: list[MinimalSource]
 
 

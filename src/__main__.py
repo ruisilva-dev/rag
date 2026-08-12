@@ -9,7 +9,7 @@ from src.models import (
     RagDataset,
     StudentSearchResults,
     MinimalAnswer,
-    StudentSearchResultsAndAnswer
+    StudentSearchResultsAndAnswer,
 )
 from src.ingestion import FileDiscoverer, FileChunker
 from src.bm25.indexer import BM25Indexer
@@ -17,6 +17,7 @@ from src.bm25.engine import BM25SearchEngine
 from src.utils import catch_cli_errors
 from src.generation.context import ContextBuilder
 from src.generation.generator import AnswerGenerator
+from src.evaluation import SearchEvaluator
 
 DEFAULT_INDEX_DIR = "data/processed/bm25_index"
 
@@ -152,10 +153,16 @@ class CLI:
         sources = search_results.search_results[0].retrieved_sources
 
         # Reconstruct context from source files
-        context: str = ContextBuilder().build(sources)
+        if k == 0 or not sources:
+            answer_str = (
+                "Error: No context retrieved (k=0 or empty index). "
+                "Cannot generate answer."
+            )
+        else:
+            context: str = ContextBuilder().build(sources)
+            # Generate answer using LLM
+            answer_str = AnswerGenerator().generate(query_string, context)
 
-        # Generate answer using LLM
-        answer_str = AnswerGenerator().generate(query_string, context)
         minimal_answer = MinimalAnswer(
             **minimal_search.model_dump(),
             answer=answer_str
@@ -209,8 +216,16 @@ class CLI:
         for result in tqdm(
             search_dataset.search_results, desc="Processing questions"
         ):
-            context = context_builder.build(result.retrieved_sources)
-            answer_str = answer_generator.generate(result.question, context)
+            if search_dataset.k == 0 or not result.retrieved_sources:
+                answer_str = (
+                    "Error: No context retrieved. "
+                    "Cannot generate answer."
+                )
+            else:
+                context = context_builder.build(result.retrieved_sources)
+                answer_str = answer_generator.generate(
+                    result.question, context
+                )
 
             minimal_answer = MinimalAnswer(
                 **result.model_dump(),
@@ -232,6 +247,46 @@ class CLI:
         output_file.write_text(raw_json)
 
         print(f"Saved student_search_results_and_answer to {output_file}")
+
+    @catch_cli_errors
+    def evaluate(
+        self,
+        student_search_results_path: str,
+        dataset_path: str,
+        k: int = 10,
+        max_chunk_size: int = 2000
+    ) -> None:
+        """Evaluates search results against ground truth.
+
+        Calculates Recall@k by verifying if retrieved sources have an
+        Intersection over Union (IoU) overlap of at least 5% with expected
+        ground truth sources.
+
+        Args:
+            student_search_results_path (str): Path to generated JSON answers.
+            dataset_path (str): Path to ground truth dataset JSON.
+            k (int): Maximum k limit for evaluation. Defaults to 10.
+            max_chunk_size (int): Max allowed character length per chunk.
+                Defaults to 2000.
+        """
+        # Load search results
+        pred_content = Path(student_search_results_path).read_text(
+            encoding="utf-8"
+        )
+        pred_dataset = StudentSearchResults.model_validate_json(pred_content)
+
+        # Load Ground Truth Dataset
+        gt_content = Path(dataset_path).read_text(encoding="utf-8")
+        gt_dataset = RagDataset.model_validate_json(gt_content)
+
+        # Execute evaluation logic
+        evaluator = SearchEvaluator()
+        evaluator.evaluate(
+            pred_dataset=pred_dataset,
+            gt_dataset=gt_dataset,
+            k=k,
+            max_chunk_size=max_chunk_size
+        )
 
 
 if __name__ == "__main__":
