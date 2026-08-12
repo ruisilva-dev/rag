@@ -54,8 +54,7 @@ class StudentSearchResults(BaseModel):
     k: int
 
 
-class StudentSearchResultsAndAnswer(BaseModel):
+class StudentSearchResultsAndAnswer(StudentSearchResults):
     """Collection wrapper for batch search results and answers."""
 
-    search_results: list[MinimalAnswer]
-    k: int
+    search_results: list[MinimalAnswer]  # type: ignore
