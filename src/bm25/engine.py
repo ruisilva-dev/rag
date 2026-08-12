@@ -70,8 +70,6 @@ class BM25SearchEngine:
         Returns:
             list[MinimalSource]: The top matching metadata sources.
         """
-        expanded_limit = limit * 10
-
         stemmer = Stemmer.Stemmer("english")
         stop_words: list[str] = list(bm25s.stopwords.STOPWORDS_EN_PLUS)
 
@@ -82,16 +80,13 @@ class BM25SearchEngine:
         if limit > len(self.sources):
             limit = len(self.sources)
 
-        if expanded_limit > len(self.sources):
-            expanded_limit = limit
-
-        indices, _ = self.retriever.retrieve(query_tokens, k=expanded_limit)
+        indices, _ = self.retriever.retrieve(query_tokens, k=limit)
 
         # bm25s returns a 2D array for batch queries
         # indices[0] gets the matches for our single query
         results: list[MinimalSource] = [self.sources[i] for i in indices[0]]
 
-        return results[:limit]
+        return results
 
     def search_to_model(
         self,

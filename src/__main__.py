@@ -44,11 +44,11 @@ class CLI:
             max_chunk_size (int): Maximum character limit per chunk.
         """
         # Discover target files
-        gen = FileDiscoverer(repo_path).discover_files()
+        files = list(FileDiscoverer(repo_path).discover_files())
 
         # Extract and chunk text
         sources: list[MinimalSource] = []
-        for file_path in tqdm(gen, desc="Indexing files"):
+        for file_path in tqdm(files, desc="Indexing files"):
             sources.extend(FileChunker(max_chunk_size).process_file(file_path))
 
         indexer = BM25Indexer()
