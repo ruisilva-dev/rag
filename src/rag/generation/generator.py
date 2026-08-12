@@ -5,13 +5,14 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 
 SYSTEM_PROMPT = (
     "You are an expert coding assistant. You must answer the user's "
-    "question using ONLY the provided context. Do not hallucinate. Your "
-    "answer must be self-contained and directly answer the question. "
+    "question using ONLY the provided context. Do not hallucinate. "
+    "When asked about API endpoints, commands, or parameters, always "
+    "extract the exact technical string or path rather than describing its "
+    "section. "
+    "Keep your answer concise, direct, and self-contained. "
     "MANDATORY RULE: At the very end of your answer, you must explicitly "
     "cite the source file path exactly as provided in the context "
-    "(for instance, 'Source: data/raw/...'). "
-    "If the answer is not contained in the context, reply exactly with: "
-    "'I cannot answer this based on the provided context.'"
+    "(for instance, 'Source: data/raw/...')."
 )
 
 
@@ -47,7 +48,7 @@ class AnswerGenerator:
             f"Question: {question}\n\n"
             "Remember: Answer the question using ONLY the context above. "
             "At the very end of your response, you must cite the "
-            "source file path as 'Source: <file_path>'."
+            "source file path."
         )
 
         messages = [
