@@ -1,5 +1,5 @@
 [project]
-name = "rag"
+name = "src"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -26,5 +26,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.mypy]
-modules = ["bm25s", "fire"]
 ignore_missing_imports = true

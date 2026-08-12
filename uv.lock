@@ -1357,45 +1357,6 @@ wheels = [
 ]
 
 [[package]]
-name = "rag"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "bm25s" },
-    { name = "fire" },
-    { name = "pydantic" },
-    { name = "pystemmer" },
-    { name = "torch" },
-    { name = "tqdm" },
-    { name = "transformers" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "flake8" },
-    { name = "mypy" },
-    { name = "pytest" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "bm25s", specifier = ">=0.3.9" },
-    { name = "fire", specifier = ">=0.7.1" },
-    { name = "pydantic", specifier = ">=2.13.4" },
-    { name = "pystemmer", specifier = ">=3.1.0" },
-    { name = "torch", specifier = ">=2.13.0" },
-    { name = "tqdm", specifier = ">=4.70.0" },
-    { name = "transformers", specifier = ">=5.15.0" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "flake8", specifier = ">=7.3.0" },
-    { name = "mypy", specifier = ">=2.1.0" },
-    { name = "pytest", specifier = ">=9.1.1" },
-]
-
-[[package]]
 name = "regex"
 version = "2026.7.19"
 source = { registry = "https://pypi.org/simple" }
@@ -1569,6 +1530,45 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/58/15/8b3609fd3830ef7b27b655beb4b4e9c62313a4e8da8c676e142cc210d58e/shellingham-1.5.4.tar.gz", hash = "sha256:8dbca0739d487e5bd35ab3ca4b36e11c4078f3a234bfce294b0a0291363404de", size = 10310, upload-time = "2023-10-24T04:13:40.426Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e0/f9/0595336914c5619e5f28a1fb793285925a8cd4b432c9da0a987836c7f822/shellingham-1.5.4-py2.py3-none-any.whl", hash = "sha256:7ecfff8f2fd72616f7481040475a65b2bf8af90a56c89140852d1120324e8686", size = 9755, upload-time = "2023-10-24T04:13:38.866Z" },
+]
+
+[[package]]
+name = "src"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "bm25s" },
+    { name = "fire" },
+    { name = "pydantic" },
+    { name = "pystemmer" },
+    { name = "torch" },
+    { name = "tqdm" },
+    { name = "transformers" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "flake8" },
+    { name = "mypy" },
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "bm25s", specifier = ">=0.3.9" },
+    { name = "fire", specifier = ">=0.7.1" },
+    { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "pystemmer", specifier = ">=3.1.0" },
+    { name = "torch", specifier = ">=2.13.0" },
+    { name = "tqdm", specifier = ">=4.70.0" },
+    { name = "transformers", specifier = ">=5.15.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "flake8", specifier = ">=7.3.0" },
+    { name = "mypy", specifier = ">=2.1.0" },
+    { name = "pytest", specifier = ">=9.1.1" },
 ]
 
 [[package]]
