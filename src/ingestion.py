@@ -5,7 +5,7 @@ from typing import Generator, Callable
 import sys
 import itertools
 import re
-from rag.models import MinimalSource
+from src.models import MinimalSource
 
 
 ChunkData = list[tuple[str, int, int, list[str]]]

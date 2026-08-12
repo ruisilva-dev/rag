@@ -1,4 +1,4 @@
-"""LLM Answer Generation module using DSPy and Qwen."""
+"""LLM Answer Generation module."""
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
@@ -17,7 +17,19 @@ SYSTEM_PROMPT = (
 
 
 class AnswerGenerator:
+    """Generates source-grounded answers using causal language models."""
+
     def __init__(self, model_name: str = "Qwen/Qwen3-0.6B") -> None:
+        """Initializes the tokenizer, model, and generation pipeline.
+
+        Args:
+            model_name (str): Hugging Face model repository identifier.
+                Defaults to "Qwen/Qwen3-0.6B".
+
+        Raises:
+            RuntimeError: If model initialization or device assignment
+                fails.
+        """
         if torch.cuda.is_available():
             self.device = "cuda"
         elif torch.backends.mps.is_available():
@@ -43,6 +55,16 @@ class AnswerGenerator:
             ) from e
 
     def generate(self, question: str, context: str) -> str:
+        """Generates an answer to a question using provided context.
+
+        Args:
+            question (str): The user query to answer.
+            context (str): Formatted source text context.
+
+        Returns:
+            str: Generated answer containing source citation or error
+                message.
+        """
         user_content = (
             f"Context:\n---\n{context}\n---\n\n"
             f"Question: {question}\n\n"

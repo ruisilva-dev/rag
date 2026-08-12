@@ -5,7 +5,7 @@ import json
 import bm25s
 import Stemmer
 from pathlib import Path
-from rag.models import (
+from src.models import (
     MinimalSource,
     MinimalSearchResults,
     StudentSearchResults,

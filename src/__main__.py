@@ -4,18 +4,19 @@ import fire
 import bm25s
 from pathlib import Path
 from tqdm import tqdm
-from rag.models import (
+from src.models import (
     MinimalSource,
     RagDataset,
     StudentSearchResults,
     MinimalAnswer,
     StudentSearchResultsAndAnswer
 )
-from rag.ingestion import FileDiscoverer, FileChunker
-from rag.bm25.indexer import BM25Indexer
-from rag.bm25.engine import BM25SearchEngine
-from rag.generation.context import ContextBuilder
-from rag.generation.generator import AnswerGenerator
+from src.ingestion import FileDiscoverer, FileChunker
+from src.bm25.indexer import BM25Indexer
+from src.bm25.engine import BM25SearchEngine
+from src.utils import catch_cli_errors
+from src.generation.context import ContextBuilder
+from src.generation.generator import AnswerGenerator
 
 DEFAULT_INDEX_DIR = "data/processed/bm25_index"
 
@@ -27,6 +28,7 @@ class CLI:
     generate source-grounded answers.
     """
 
+    @catch_cli_errors
     def index(
         self,
         repo_path: str = "data/raw/vllm-0.10.1",
@@ -59,6 +61,7 @@ class CLI:
         Path(save_dir).mkdir(parents=True, exist_ok=True)
         indexer.save(save_dir, retriever)
 
+    @catch_cli_errors
     def search(
         self,
         query_string: str,
@@ -90,6 +93,7 @@ class CLI:
         output_file.parent.mkdir(parents=True, exist_ok=True)
         output_file.write_text(raw_json)
 
+    @catch_cli_errors
     def search_dataset(
         self,
         dataset_path: str,
@@ -122,6 +126,7 @@ class CLI:
         output_file.parent.mkdir(parents=True, exist_ok=True)
         output_file.write_text(raw_json)
 
+    @catch_cli_errors
     def answer(
         self,
         query_string: str,
@@ -170,6 +175,7 @@ class CLI:
         output_file.parent.mkdir(parents=True, exist_ok=True)
         output_file.write_text(raw_json)
 
+    @catch_cli_errors
     def answer_dataset(
         self,
         student_search_results_path: str,

@@ -2,7 +2,7 @@
 
 import functools
 from pathlib import Path
-from rag.models import MinimalSource
+from src.models import MinimalSource
 
 
 @functools.lru_cache(maxsize=1024)
@@ -35,6 +35,8 @@ class ContextBuilder:
 
         Args:
             sources (list[MinimalSource]): List of retrieved chunk metadata.
+            max_context_size (int): Maximum character limit for output
+                context. Defaults to 3000.
 
         Returns:
             str: The aggregated and formatted context ready for an LLM.
